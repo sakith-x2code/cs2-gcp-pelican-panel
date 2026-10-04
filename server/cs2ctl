@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+# cs2ctl — manage the CS2 server on this machine.  Run `cs2ctl help`.
+set -euo pipefail
+
+BASE=/opt/cs2
+APP="python3 $BASE/dashboard/app.py"
+STATE="$BASE/state"
+C=cs2
+mkdir -p "$STATE"
+# shellcheck disable=SC1091
+[[ -f "$BASE/cs2.env" ]] && source "$BASE/cs2.env"
+: "${AUTO_UPDATE:=1}" "${UPDATE_FORCE_AFTER_MIN:=90}" "${WATCHDOG:=1}"
+
+log() { echo "$(date '+%F %T') $*"; logger -t cs2ctl -- "$*" 2>/dev/null || true; }
+need_root() { [[ $EUID -eq 0 ]] || { echo "Run with sudo"; exit 1; }; }
+humans() { $APP humans 2>/dev/null || echo -1; }
+cstate() { docker inspect -f '{{.State.Status}}' "$C" 2>/dev/null || echo missing; }
+started_epoch() { date -d "$(docker inspect -f '{{.State.StartedAt}}' "$C" 2>/dev/null)" +%s 2>/dev/null || echo 0; }
+updating() { docker top "$C" 2>/dev/null | grep -q steamcmd; }
+rcon() { $APP rcon "$*"; }
+
+usage() {
+  cat <<'EOF'
+cs2ctl — CS2 server control
+
+  status              container + game status, players, build
+  start | stop        start / stop the game container
+  restart             restart the game (also installs any pending CS2 update)
+  update              update CS2 now (warns players first if any are online)
+  upgrade             pull newest server image + recreate container
+  rcon "<cmd>"        run a console command
+  say "<msg>"         broadcast in-game chat
+  logs [N]            last N log lines (default 200);  logs -f to follow
+  console             attach to the live server console (detach: Ctrl-P Ctrl-Q)
+  config              show active settings (secrets hidden)
+  autoupdate          (timer) apply CS2 updates when safe
+  watchdog            (timer) restart a hung server
+EOF
+}
+
+cmd_status() {
+  local s; s="$(cstate)"
+  echo "Container: $s$(updating && echo ' (downloading/updating game files)')"
+  [[ "$s" == running ]] || return 0
+  $APP summary
+}
+
+cmd_update() {
+  need_root
+  local h; h="$(humans)"
+  if [[ "$h" -gt 0 ]]; then
+    rcon "say [SERVER] Restarting for a CS2 update in 60 seconds" >/dev/null 2>&1 || true
+    sleep 30; rcon "say [SERVER] Update restart in 30 seconds — reconnect in ~2 minutes" >/dev/null 2>&1 || true
+    sleep 30
+  fi
+  log "Restarting $C to apply CS2 update"
+  rm -f "$STATE/update_pending"
+  docker restart -t 30 "$C" >/dev/null
+  echo "Restarted. The container updates CS2 before starting; watch: cs2ctl logs -f"
+}
+
+cmd_upgrade() {
+  need_root
+  cd "$BASE"
+  log "Pulling newest images"
+  docker compose pull -q
+  docker compose up -d --remove-orphans
+  docker image prune -f >/dev/null
+  log "Upgrade complete"
+}
+
+cmd_autoupdate() {
+  [[ "$AUTO_UPDATE" == "1" ]] || exit 0
+  [[ "$(cstate)" == running ]] || exit 0
+  updating && exit 0
+  read -r inst latest < <($APP builds)
+  if [[ "$inst" == 0 || "$latest" == 0 || "$latest" -le "$inst" ]]; then rm -f "$STATE/update_pending"; exit 0; fi
+  local h; h="$(humans)"
+  if [[ "$h" -le 0 ]]; then
+    log "CS2 update $inst -> $latest, server empty: applying"
+    rm -f "$STATE/update_pending"; docker restart -t 30 "$C" >/dev/null; exit 0
+  fi
+  [[ -f "$STATE/update_pending" ]] || date +%s >"$STATE/update_pending"
+  local since=$(( ( $(date +%s) - $(cat "$STATE/update_pending") ) / 60 ))
+  if [[ "$since" -ge "$UPDATE_FORCE_AFTER_MIN" ]]; then
+    log "CS2 update pending ${since} min with $h players: forcing"
+    cmd_update
+  else
+    rcon "say [SERVER] A CS2 update is available. The server will update when empty." >/dev/null 2>&1 || true
+    log "CS2 update $inst -> $latest waiting for $h players to leave (${since}/${UPDATE_FORCE_AFTER_MIN} min)"
+  fi
+}
+
+cmd_watchdog() {
+  [[ "$WATCHDOG" == "1" ]] || exit 0
+  [[ "$(cstate)" == running ]] || { rm -f "$STATE/watchdog_fails"; exit 0; }
+  updating && exit 0
+  (( $(date +%s) - $(started_epoch) > 900 )) || exit 0       # allow 15 min to boot
+  if [[ "$(humans)" -ge 0 ]]; then rm -f "$STATE/watchdog_fails"; exit 0; fi
+  local n=$(( $(cat "$STATE/watchdog_fails" 2>/dev/null || echo 0) + 1 ))
+  echo "$n" >"$STATE/watchdog_fails"
+  log "Watchdog: game not answering RCON ($n/3)"
+  if [[ "$n" -ge 3 ]]; then
+    log "Watchdog: restarting hung server"
+    rm -f "$STATE/watchdog_fails"
+    docker restart -t 20 "$C" >/dev/null
+  fi
+}
+
+cmd="${1:-help}"; shift || true
+case "$cmd" in
+  status)     cmd_status ;;
+  start)      need_root; docker start "$C" >/dev/null && echo started ;;
+  stop)       need_root; docker stop -t 30 "$C" >/dev/null && echo stopped ;;
+  restart)    need_root; docker restart -t 30 "$C" >/dev/null && echo restarted ;;
+  update)     cmd_update ;;
+  upgrade)    cmd_upgrade ;;
+  rcon)       rcon "$*" ;;
+  say)        rcon "say $*" ;;
+  logs)       if [[ "${1:-}" == "-f" ]]; then docker logs -f --tail 100 "$C"; else docker logs --tail "${1:-200}" "$C" 2>&1; fi ;;
+  console)    echo "Attaching — detach with Ctrl-P then Ctrl-Q (Ctrl-C stops the server!)"; docker attach "$C" ;;
+  config)     grep -vE 'PW|PASSWORD|TOKEN' "$BASE/cs2.env" ;;
+  autoupdate) cmd_autoupdate ;;
+  watchdog)   cmd_watchdog ;;
+  help|-h|--help) usage ;;
+  *) usage; exit 1 ;;
+esac

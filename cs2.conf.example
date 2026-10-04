@@ -1,0 +1,51 @@
+# =====================================================================
+#  cs2-gcp configuration
+#  Copy to cs2.conf (./cs2-gcp.sh init does this) and edit.
+#  Empty passwords are generated automatically and written back here.
+#  Keep this file private: it holds your passwords and Steam token.
+# =====================================================================
+
+# ---------------------------------------------------------------- GCP
+PROJECT_ID=""                    # your GCP project id (required)
+REGION="us-south1"               # Dallas. Alternatives: us-central1 (Iowa), us-east4 (Virginia), us-west1 (Oregon)
+ZONE="us-south1-a"
+INSTANCE_NAME="cs2-server"
+MACHINE_TYPE="c3-highcpu-4"      # 4 vCPU / 8 GB, high clock. Bigger: c3-highcpu-8. c4-highcpu-4 needs DISK_TYPE=hyperdisk-balanced
+DISK_SIZE_GB=100                 # CS2 needs ~60 GB; leave headroom for updates/maps
+DISK_TYPE="pd-balanced"          # pd-balanced | pd-ssd | hyperdisk-balanced
+NETWORK_TIER="PREMIUM"           # PREMIUM = Google backbone (lower, steadier ping). STANDARD is cheaper.
+NETWORK_NAME="cs2-net"
+SUBNET_RANGE="10.50.0.0/24"
+ADMIN_CIDR="0.0.0.0/0"           # who may reach SSH + dashboard. Best: your home IP, e.g. "203.0.113.7/32"
+SNAPSHOT_RETENTION_DAYS=7        # daily disk snapshots kept this many days (0 = disable)
+SNAPSHOT_START_UTC="09:00"       # 09:00 UTC = 4 AM Central
+
+# ---------------------------------------------------------------- CS2
+SRCDS_TOKEN=""                   # Game Server Login Token, app id 730: https://steamcommunity.com/dev/managegameservers
+CS2_SERVERNAME="Friends CS2"
+CS2_PW=""                        # join password (leave empty for none; recommended for a private server)
+CS2_RCONPW=""                    # auto-generated if empty
+CS2_MAXPLAYERS=12
+CS2_GAMEALIAS="competitive"      # competitive | casual | wingman | deathmatch | armsrace
+CS2_STARTMAP="de_dust2"
+CS2_MAPGROUP="mg_active"
+CS2_BOT_QUOTA=""                 # e.g. 0 for no bots
+CS2_BOT_DIFFICULTY=""            # 0 easy .. 3 expert
+CS2_ADDITIONAL_ARGS=""           # extra launch args
+TV_ENABLE=0                      # 1 = CSTV on UDP 27020 (spectate / record demos)
+TV_AUTORECORD=0
+TV_PW=""
+CS2_IMAGE="joedwards32/cs2:latest"
+STEAMAPPVALIDATE=0               # 1 = verify/repair game files on every start (slow); set back to 0 after a repair
+
+# ---------------------------------------------------------------- Dashboard
+DASH_USER="admin"
+DASH_PASSWORD=""                 # auto-generated if empty
+DASH_DOMAIN=""                   # your own domain (A record -> server IP). Empty = <ip>.sslip.io
+DASH_TLS="auto"                  # auto = Let's Encrypt (needs ADMIN_CIDR 0.0.0.0/0) | internal = self-signed
+
+# ---------------------------------------------------------------- Reliability
+AUTO_UPDATE=1                    # apply CS2 updates automatically when the server is empty
+UPDATE_FORCE_AFTER_MIN=90        # if players stay on, force the update after this long (with in-game warning)
+WATCHDOG=1                       # restart the game if it stops answering for ~6 minutes
+SSH_VIA_IAP="auto"               # auto = use IAP tunnel when ADMIN_CIDR is restricted | 1 = always | 0 = never

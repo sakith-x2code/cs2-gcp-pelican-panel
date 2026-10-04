@@ -1,0 +1,9 @@
+# Local configuration holds passwords and the Steam token — never commit it
+cs2.conf
+*.env
+!*.env.example
+__pycache__/
+*.pyc
+*.tgz
+*.zip
+.DS_Store

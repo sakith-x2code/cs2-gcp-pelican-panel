@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CS2 Server</title>
+<style>
+:root{
+  --bg:#0e1116; --panel:#151a21; --panel2:#1b212a; --line:#262e3a; --text:#e6e9ee; --muted:#8b96a7;
+  --accent:#f5a623; --accent-ink:#1a1206; --ok:#3ecf8e; --bad:#ff5d5d; --warn:#f5c542; --blue:#5aa9ff;
+  --mono: ui-monospace, "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#f4f5f7; --panel:#ffffff; --panel2:#f7f8fa; --line:#e2e5ea; --text:#141820; --muted:#5d6878;
+    --accent:#d9870b; --accent-ink:#fff; --ok:#1a9f66; --bad:#d63b3b; --warn:#b98a00; --blue:#2f7bd8;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 var(--sans)}
+header{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;justify-content:space-between;
+  padding:16px 20px;border-bottom:1px solid var(--line);background:var(--panel)}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}
+.brand h1{margin:0;font-size:18px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pill{font:600 11px/1 var(--sans);letter-spacing:.06em;text-transform:uppercase;padding:6px 9px;border-radius:999px;border:1px solid}
+.pill.ok{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 45%,transparent)}
+.pill.bad{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 45%,transparent)}
+.pill.warn{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 45%,transparent)}
+.connect{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+code.addr{font:600 13px var(--mono);background:var(--panel2);border:1px solid var(--line);padding:7px 10px;border-radius:8px}
+main{max-width:1280px;margin:0 auto;padding:20px;display:grid;gap:16px}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;min-width:0}
+.card h2{margin:0 0 12px;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .k{font-size:12px;color:var(--muted)}
+.stat .v{font:700 24px/1.2 var(--mono);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stat .s{font-size:12px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar{height:4px;background:var(--panel2);border-radius:4px;margin-top:8px;overflow:hidden}
+.bar>i{display:block;height:100%;background:var(--accent);width:0;transition:width .4s}
+.two{display:grid;gap:16px;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr)}
+@media (max-width:900px){.two{grid-template-columns:1fr}}
+.charts{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.chart .top{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;color:var(--muted)}
+.chart .top b{font:700 14px var(--mono);color:var(--text)}
+svg.spark{width:100%;height:70px;display:block;margin-top:6px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-weight:600;color:var(--muted);font-size:12px;padding:6px 8px;border-bottom:1px solid var(--line)}
+td{padding:7px 8px;border-bottom:1px solid var(--line)}
+td.num{font-family:var(--mono);text-align:right}
+.empty{color:var(--muted);padding:14px 4px}
+button,select,input{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 11px}
+button{cursor:pointer;font-weight:600}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button.danger{color:var(--bad)}
+button.sm{padding:4px 9px;font-size:12px}
+button:disabled{opacity:.5;cursor:wait}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.row>select,.row>input{flex:1 1 140px;min-width:0}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+.sub{font-size:12px;color:var(--muted);margin:14px 0 8px;font-weight:600}
+pre.term{font:12.5px/1.5 var(--mono);background:#07090c;color:#cfe3d4;border:1px solid var(--line);border-radius:10px;
+  padding:12px;height:300px;overflow:auto;white-space:pre-wrap;word-break:break-word;margin:0 0 10px}
+pre.term .cmd{color:var(--accent)} pre.term .err{color:var(--bad)}
+.term-in{display:flex;gap:8px}
+.term-in input{flex:1;font-family:var(--mono)}
+.events{font-size:12px;color:var(--muted);max-height:120px;overflow:auto}
+.events div{padding:3px 0;border-bottom:1px dashed var(--line)}
+#toast{position:fixed;right:16px;bottom:16px;max-width:min(420px,calc(100vw - 32px));background:var(--panel);border:1px solid var(--line);
+  border-left:4px solid var(--accent);border-radius:10px;padding:10px 14px;box-shadow:0 8px 30px rgba(0,0,0,.35);
+  opacity:0;transform:translateY(10px);transition:.25s;pointer-events:none;white-space:pre-wrap;font-size:13px}
+#toast.show{opacity:1;transform:none}
+.banner{background:color-mix(in srgb,var(--warn) 14%,var(--panel));border:1px solid color-mix(in srgb,var(--warn) 40%,transparent);
+  border-radius:10px;padding:10px 14px;display:none;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.tw{overflow-x:auto}
+@media (max-width:600px){header{padding:12px 16px} main{padding:16px} .hide-sm{display:none}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="11" fill="none" stroke="var(--accent)" stroke-width="2.5"/><path d="M14 2v7M14 19v7M2 14h7M19 14h7" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round"/></svg>
+    <h1 id="title">CS2 Server</h1>
+    <span id="status" class="pill warn">connecting</span>
+  </div>
+  <div class="connect">
+    <code class="addr" id="addr">—</code>
+    <button class="sm" id="copy">Copy connect</button>
+    <a id="join" href="#"><button class="sm primary">Join game</button></a>
+  </div>
+</header>
+
+<main>
+  <div class="banner" id="updbanner"><span id="updtext">A CS2 update is available.</span>
+    <button class="sm" data-act="update" data-confirm="Restart the server now to install the CS2 update?">Update now</button></div>
+
+  <section class="grid">
+    <div class="card stat"><div class="k">Players</div><div class="v" id="players">–</div><div class="s" id="players_s">&nbsp;</div></div>
+    <div class="card stat"><div class="k">Map</div><div class="v" id="map">–</div><div class="s" id="map_s">&nbsp;</div></div>
+    <div class="card stat"><div class="k">CPU (busiest core)</div><div class="v" id="cpu">–</div><div class="s" id="cpu_s">&nbsp;</div><div class="bar"><i id="cpu_b"></i></div></div>
+    <div class="card stat"><div class="k">Memory</div><div class="v" id="mem">–</div><div class="s" id="mem_s">&nbsp;</div><div class="bar"><i id="mem_b"></i></div></div>
+    <div class="card stat"><div class="k">Network</div><div class="v" id="net">–</div><div class="s" id="net_s">&nbsp;</div></div>
+    <div class="card stat"><div class="k">Disk</div><div class="v" id="disk">–</div><div class="s" id="disk_s">&nbsp;</div><div class="bar"><i id="disk_b"></i></div></div>
+  </section>
+
+  <section class="card">
+    <h2>Last hour</h2>
+    <div class="charts">
+      <div class="chart"><div class="top"><span>Players</span><b id="c_players">–</b></div><svg class="spark" id="s_players" preserveAspectRatio="none"></svg></div>
+      <div class="chart"><div class="top"><span>Avg ping (ms)</span><b id="c_ping">–</b></div><svg class="spark" id="s_ping" preserveAspectRatio="none"></svg></div>
+      <div class="chart"><div class="top"><span>CPU busiest core %</span><b id="c_cpu">–</b></div><svg class="spark" id="s_cpu" preserveAspectRatio="none"></svg></div>
+      <div class="chart"><div class="top"><span>Network out</span><b id="c_net">–</b></div><svg class="spark" id="s_net" preserveAspectRatio="none"></svg></div>
+    </div>
+  </section>
+
+  <section class="two">
+    <div class="card">
+      <h2>Players</h2>
+      <div class="tw"><table><thead><tr><th>#</th><th>Name</th><th style="text-align:right">Ping</th><th style="text-align:right">Loss</th><th class="hide-sm">Time</th><th></th></tr></thead>
+        <tbody id="ptable"><tr><td colspan="6" class="empty">No one connected</td></tr></tbody></table></div>
+      <div class="sub">Broadcast</div>
+      <div class="row"><input id="saymsg" placeholder="Message to all players" maxlength="120"><button id="saybtn">Send</button></div>
+    </div>
+
+    <div class="card">
+      <h2>Match control</h2>
+      <div class="row">
+        <select id="mode"></select>
+        <select id="mapsel"></select>
+      </div>
+      <div class="btns" style="margin-bottom:10px">
+        <button class="primary" id="applymode">Change map / mode</button>
+      </div>
+      <div class="sub">Round</div>
+      <div class="btns">
+        <button data-act="restart_round">Restart round</button>
+        <button data-act="end_warmup">End warmup</button>
+        <button data-act="pause">Pause</button>
+        <button data-act="unpause">Unpause</button>
+        <button data-act="swap_teams">Swap teams</button>
+        <button data-act="scramble">Scramble</button>
+      </div>
+      <div class="sub">Presets</div>
+      <div class="btns">
+        <button data-act="preset" data-preset="live" data-confirm="Apply LIVE settings and restart the match?">Go live</button>
+        <button data-act="preset" data-preset="practice" data-confirm="Apply practice settings (cheats on, infinite money)?">Practice</button>
+        <button data-act="preset" data-preset="warmup">Warmup</button>
+      </div>
+      <div class="sub">Bots</div>
+      <div class="btns">
+        <button data-act="bot_add_t">+ Bot T</button>
+        <button data-act="bot_add_ct">+ Bot CT</button>
+        <button data-act="bot_kick">Kick all bots</button>
+      </div>
+      <div class="sub">Workshop map</div>
+      <div class="row"><input id="wsid" placeholder="Workshop ID e.g. 3070284539" inputmode="numeric"><button id="wsbtn">Load</button></div>
+    </div>
+  </section>
+
+  <section class="two">
+    <div class="card">
+      <h2>Console (RCON)</h2>
+      <pre class="term" id="term"></pre>
+      <div class="term-in"><input id="cmd" placeholder="e.g.  mp_roundtime 2   ·   ↑/↓ for history" autocomplete="off" spellcheck="false"><button class="primary" id="run">Run</button></div>
+    </div>
+    <div class="card">
+      <h2>Server</h2>
+      <table>
+        <tr><td>Status</td><td class="num" id="i_phase">–</td></tr>
+        <tr><td>Container uptime</td><td class="num" id="i_up">–</td></tr>
+        <tr><td>Crash restarts</td><td class="num" id="i_restarts">–</td></tr>
+        <tr><td>Game CPU / memory</td><td class="num" id="i_cstats">–</td></tr>
+        <tr><td>CS2 build</td><td class="num" id="i_build">–</td></tr>
+        <tr><td>Load avg</td><td class="num" id="i_load">–</td></tr>
+        <tr><td>UDP receive errors</td><td class="num" id="i_udp">–</td></tr>
+        <tr><td>VM uptime</td><td class="num" id="i_vmup">–</td></tr>
+      </table>
+      <div class="sub">Join password (until restart)</div>
+      <div class="row"><input id="pw" placeholder="empty = no password" maxlength="32"><button id="pwbtn">Set</button></div>
+      <div class="sub">Power</div>
+      <div class="btns">
+        <button data-act="container_restart" data-confirm="Restart the game server? Players will be disconnected.">Restart server</button>
+        <button data-act="update" data-confirm="Update CS2 now? Players get a 60 s warning.">Update CS2</button>
+        <button data-act="upgrade" data-confirm="Pull the newest server image and recreate the container?">Upgrade image</button>
+        <button class="danger" data-act="container_stop" data-confirm="Stop the game server?">Stop</button>
+        <button data-act="container_start">Start</button>
+      </div>
+      <div class="sub">Events</div>
+      <div class="events" id="events"><div>—</div></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2 style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">Server log
+      <span class="btns"><button class="sm" id="logbtn">Refresh</button><label style="font-size:12px;color:var(--muted);text-transform:none;letter-spacing:0;font-weight:500"><input type="checkbox" id="logauto"> auto</label></span></h2>
+    <pre class="term" id="logs" style="height:340px">Press Refresh to load the log.</pre>
+  </section>
+</main>
+<div id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+let S = null, mapsKey = "", hist = [], hpos = 0;
+
+function fmtBytes(b){ if(b==null) return "–"; const u=["B","KB","MB","GB","TB"]; let i=0; while(b>=1024&&i<4){b/=1024;i++} return (b<10&&i?b.toFixed(1):Math.round(b))+" "+u[i]; }
+function fmtRate(b){ if(b==null) return "–"; return fmtBytes(b)+"/s"; }
+function fmtDur(s){ if(s==null||s<0) return "–"; const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);
+  return d?`${d}d ${h}h`:h?`${h}h ${m}m`:`${m}m`; }
+function toast(msg, bad){ const t=$("toast"); t.textContent=msg; t.style.borderLeftColor=bad?"var(--bad)":"var(--accent)";
+  t.classList.add("show"); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove("show"), 4500); }
+
+async function post(url, body){
+  const r = await fetch(url,{method:"POST",headers:{"Content-Type":"application/json","X-CS2-Dash":"1"},body:JSON.stringify(body)});
+  const j = await r.json().catch(()=>({error:"bad response"}));
+  if(!r.ok) throw new Error(j.error||r.statusText);
+  return j;
+}
+async function act(body, btn){
+  if(btn) btn.disabled = true;
+  try{ const j = await post("/api/action", body); toast(j.output||"OK"); setTimeout(refresh, 800); }
+  catch(e){ toast(e.message, true); }
+  finally{ if(btn) btn.disabled = false; }
+}
+
+function spark(id, data, color, maxFixed){
+  const svg=$(id), W=300, H=70, vals=data.map(v=>v==null?null:+v);
+  const nums=vals.filter(v=>v!=null);
+  svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  if(nums.length<2){ svg.innerHTML=`<text x="4" y="40" fill="var(--muted)" font-size="12">collecting…</text>`; return; }
+  const max=Math.max(maxFixed||0, ...nums, 1), n=vals.length;
+  let d="", started=false;
+  vals.forEach((v,i)=>{ if(v==null){started=false;return;} const x=i/(n-1)*W, y=H-3-(v/max)*(H-8);
+    d+=(started?"L":"M")+x.toFixed(1)+","+y.toFixed(1); started=true; });
+  const firstX=vals.findIndex(v=>v!=null)/(n-1)*W;
+  svg.innerHTML=`<path d="${d} L${W},${H} L${firstX.toFixed(1)},${H} Z" fill="${color}" opacity=".12"/>
+    <path d="${d}" fill="none" stroke="${color}" stroke-width="1.8" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>`;
+}
+
+function setBar(id,p){ $(id).style.width=Math.max(0,Math.min(100,p||0))+"%";
+  $(id).style.background = p>90?"var(--bad)":p>75?"var(--warn)":"var(--accent)"; }
+
+function render(s){
+  S = s; const g=s.game||{}, h=s.host||{}, c=s.container||{}, cfg=s.config||{}, b=s.build||{};
+  $("title").textContent = g.hostname || cfg.servername || "CS2 Server";
+  document.title = (g.online?`(${g.humans||0}) `:"") + ($("title").textContent);
+  const st=$("status");
+  let phase, cls;
+  if(c.state==="running" && c.updating){ phase="updating"; cls="warn"; }
+  else if(g.online){ phase="online"; cls="ok"; }
+  else if(c.state==="running"){ phase="starting"; cls="warn"; }
+  else if(c.state){ phase=c.state==="missing"?"not installed":c.state; cls="bad"; }
+  else { phase="…"; cls="warn"; }
+  st.textContent=phase; st.className="pill "+cls;
+  $("i_phase").textContent = c.updating ? "Downloading / updating game files" : g.online ? "Online" : (g.error||phase);
+
+  const addr = `${cfg.ip||location.hostname}:${cfg.port||27015}`;
+  $("addr").textContent = "connect "+addr+(cfg.password?"; password "+cfg.password:"");
+  $("join").href = `steam://connect/${addr}${cfg.password?"/"+encodeURIComponent(cfg.password):""}`;
+
+  $("players").textContent = g.online ? `${g.humans}/${g.max??"–"}` : "–";
+  $("players_s").textContent = g.online ? `${g.bots||0} bot${g.bots===1?"":"s"}` : " ";
+  $("map").textContent = g.map || "–";
+  $("map_s").textContent = g.version ? "version "+g.version : " ";
+  $("cpu").textContent = h.cpu_max_core!=null ? Math.round(h.cpu_max_core)+"%" : "–";
+  $("cpu_s").textContent = h.cpu!=null ? `avg ${Math.round(h.cpu)}% · ${h.ncpu} vCPU` : " ";
+  setBar("cpu_b", h.cpu_max_core);
+  $("mem").textContent = h.mem_pct!=null ? Math.round(h.mem_pct)+"%" : "–";
+  $("mem_s").textContent = `${fmtBytes(h.mem_used)} of ${fmtBytes(h.mem_total)}${h.swap_used>0?" · swap "+fmtBytes(h.swap_used):""}`;
+  setBar("mem_b", h.mem_pct);
+  $("net").textContent = fmtRate(h.net_tx);
+  $("net_s").textContent = `out · in ${fmtRate(h.net_rx)} · ${h.pps_rx??"–"} pkt/s`;
+  $("disk").textContent = h.disk_pct!=null ? Math.round(h.disk_pct)+"%" : "–";
+  $("disk_s").textContent = `${fmtBytes(h.disk_used)} of ${fmtBytes(h.disk_total)}`;
+  setBar("disk_b", h.disk_pct);
+
+  const H=s.history||{};
+  spark("s_players", H.players||[], "var(--accent)", 10); $("c_players").textContent = g.online? g.humans : "–";
+  spark("s_ping", H.ping||[], "var(--blue)", 50);
+  const lastPing=(H.ping||[]).filter(v=>v!=null).slice(-1)[0]; $("c_ping").textContent = lastPing!=null? lastPing : "–";
+  spark("s_cpu", H.cpu_max_core||[], "var(--ok)", 100); $("c_cpu").textContent = $("cpu").textContent;
+  spark("s_net", H.net_tx||[], "var(--warn)"); $("c_net").textContent = fmtRate(h.net_tx);
+
+  const pt=$("ptable"), players=(g.players||[]).slice().sort((a,b)=>a.bot-b.bot||a.id-b.id);
+  pt.textContent="";
+  if(!players.length){ pt.innerHTML=`<tr><td colspan="6" class="empty">${g.online?"No one connected":"Server not answering"}</td></tr>`; }
+  players.forEach(p=>{
+    const tr=document.createElement("tr");
+    const cells=[p.id, p.name+(p.bot?" (bot)":""), p.bot?"–":p.ping, p.bot?"–":p.loss, p.time];
+    cells.forEach((v,i)=>{ const td=document.createElement("td"); td.textContent=v; if(i===2||i===3) td.className="num"; if(i===4) td.className="hide-sm";
+      if(i===2 && !p.bot) td.style.color = p.ping>120?"var(--bad)":p.ping>70?"var(--warn)":"var(--ok)"; tr.appendChild(td); });
+    const td=document.createElement("td"); td.style.textAlign="right";
+    const kb=document.createElement("button"); kb.className="sm danger"; kb.textContent="Kick";
+    kb.onclick=()=>{ if(confirm(`Kick ${p.name}?`)) act({action:"kick",userid:p.id},kb); };
+    td.appendChild(kb); tr.appendChild(td); pt.appendChild(tr);
+  });
+
+  const key=(s.maps||[]).join(",")+"|"+(s.modes||[]).join(",");
+  if(key!==mapsKey){ mapsKey=key;
+    const ms=$("mapsel"), cur=ms.value||g.map; ms.innerHTML="";
+    (s.maps||[]).forEach(m=>{ const o=document.createElement("option"); o.value=o.textContent=m; ms.appendChild(o); });
+    if(cur) ms.value=cur;
+    const md=$("mode"); md.innerHTML="";
+    const keep=document.createElement("option"); keep.value=""; keep.textContent="Keep current mode"; md.appendChild(keep);
+    (s.modes||[]).forEach(m=>{ const o=document.createElement("option"); o.value=m; o.textContent=m[0].toUpperCase()+m.slice(1); md.appendChild(o); });
+  }
+
+  let up=null; if(c.started_at && c.state==="running"){ up=(Date.now()-Date.parse(c.started_at))/1000; }
+  $("i_up").textContent = fmtDur(up);
+  $("i_restarts").textContent = c.restarts ?? "–";
+  $("i_cstats").textContent = c.cpu!=null ? `${c.cpu.toFixed(0)}% · ${(c.mem||"").split("/")[0].trim()}` : "–";
+  $("i_build").textContent = b.installed ? b.installed + (b.update_available?` → ${b.latest}`:" (latest)") : "–";
+  $("i_load").textContent = (h.load||[]).join(" ");
+  $("i_udp").textContent = h.udp_errors ?? "–";
+  $("i_udp").style.color = h.udp_errors>0 ? "var(--bad)" : "";
+  $("i_vmup").textContent = fmtDur(h.uptime);
+  $("updbanner").style.display = b.update_available ? "flex" : "none";
+  $("updtext").textContent = `CS2 update available (build ${b.latest}). ${cfg.auto_update?"It installs automatically once the server is empty.":""}`;
+
+  const ev=$("events"); ev.textContent="";
+  (s.events||[]).forEach(e=>{ const d=document.createElement("div"); d.textContent=new Date(e.t*1000).toLocaleTimeString()+"  "+e.msg; ev.appendChild(d); });
+  if(!(s.events||[]).length) ev.textContent="No events since dashboard start.";
+}
+
+async function refresh(){
+  try{ const r=await fetch("/api/state",{cache:"no-store"}); if(!r.ok) throw 0; render(await r.json()); }
+  catch(e){ const st=$("status"); st.textContent="dashboard offline"; st.className="pill bad"; }
+}
+
+function term(text, cls){ const t=$("term"), span=document.createElement("span"); if(cls) span.className=cls;
+  span.textContent=text+"\n"; t.appendChild(span); t.scrollTop=t.scrollHeight; }
+async function runCmd(){
+  const i=$("cmd"), c=i.value.trim(); if(!c) return;
+  hist.push(c); hpos=hist.length; i.value=""; term("> "+c,"cmd");
+  try{ const j=await post("/api/rcon",{cmd:c}); term(j.output.trimEnd()); setTimeout(refresh,600); }
+  catch(e){ term(e.message,"err"); }
+}
+$("run").onclick=runCmd;
+$("cmd").addEventListener("keydown",e=>{
+  if(e.key==="Enter") runCmd();
+  else if(e.key==="ArrowUp"&&hpos>0){ hpos--; $("cmd").value=hist[hpos]; e.preventDefault(); }
+  else if(e.key==="ArrowDown"){ hpos=Math.min(hist.length,hpos+1); $("cmd").value=hist[hpos]||""; e.preventDefault(); }
+});
+term("RCON console ready. Try:  status   ·   mp_maxrounds 16   ·   sv_gravity 400");
+
+document.querySelectorAll("button[data-act]").forEach(b=>b.addEventListener("click",()=>{
+  if(b.dataset.confirm && !confirm(b.dataset.confirm)) return;
+  const body={action:b.dataset.act}; if(b.dataset.preset) body.preset=b.dataset.preset; act(body,b);
+}));
+$("applymode").onclick=e=>{ const m=$("mapsel").value, mode=$("mode").value; if(!m) return;
+  act(mode?{action:"mode",mode,map:m}:{action:"changelevel",map:m}, e.currentTarget); };
+$("saybtn").onclick=e=>{ const m=$("saymsg").value.trim(); if(m){ act({action:"say",message:m},e.currentTarget); $("saymsg").value=""; } };
+$("saymsg").addEventListener("keydown",e=>{ if(e.key==="Enter") $("saybtn").click(); });
+$("wsbtn").onclick=e=>{ const id=$("wsid").value.trim(); if(id) act({action:"workshop",id},e.currentTarget); };
+$("pwbtn").onclick=e=>act({action:"password",password:$("pw").value.trim()},e.currentTarget);
+$("copy").onclick=async()=>{ try{ await navigator.clipboard.writeText($("addr").textContent); toast("Copied — paste into the CS2 console (~ key)"); }catch{ toast("Copy failed — select the text manually", true); } };
+
+async function loadLogs(){ try{ const r=await fetch("/api/logs?n=400"); const j=await r.json(); const l=$("logs");
+  const atBottom=l.scrollHeight-l.scrollTop-l.clientHeight<40; l.textContent=j.logs||"(empty)"; if(atBottom||!l._loaded) l.scrollTop=l.scrollHeight; l._loaded=true; }catch{ toast("Could not load logs",true); } }
+$("logbtn").onclick=loadLogs;
+setInterval(()=>{ if($("logauto").checked) loadLogs(); }, 5000);
+
+refresh(); setInterval(refresh, 5000);
+</script>
+</body>
+</html>
