@@ -10,7 +10,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONF="${CS2_CONF:-$SCRIPT_DIR/cs2.conf}"
 VERSION="1.1.0"
-REPO_URL="https://github.com/x2code-co/cs2-gcp-pelican-panel.git"
+REPO_URL="https://github.com/sakith-x2code/cs2-gcp-pelican-panel.git"
 
 # ---------------------------------------------------------------- output helpers
 if [[ -t 1 ]]; then B=$'\e[1m'; G=$'\e[32m'; Y=$'\e[33m'; R=$'\e[31m'; C=$'\e[36m'; N=$'\e[0m'; else B=""; G=""; Y=""; R=""; C=""; N=""; fi

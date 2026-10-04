@@ -2,7 +2,7 @@
 # =====================================================================
 #  vm-install.sh — install or update the CS2 server ON the VM from this git checkout
 #
-#    git clone https://github.com/x2code-co/cs2-gcp-pelican-panel.git cs2
+#    git clone https://github.com/sakith-x2code/cs2-gcp-pelican-panel.git cs2
 #    cd cs2 && sudo ./vm-install.sh            # first run asks a few questions
 #
 #  Update later:   cd cs2 && git pull && sudo ./vm-install.sh

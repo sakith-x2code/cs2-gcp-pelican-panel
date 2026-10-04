@@ -11,7 +11,7 @@ Full guide: [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md)
 ### A. Everything from Cloud Shell (one command)
 
 ```bash
-git clone https://github.com/x2code-co/cs2-gcp-pelican-panel.git cs2-gcp
+git clone https://github.com/sakith-x2code/cs2-gcp-pelican-panel.git cs2-gcp
 cd cs2-gcp
 ./cs2-gcp.sh init      # project id, Steam GSLT token, server name, join password
 ./cs2-gcp.sh deploy    # network, firewall, static IP, VM, snapshots + server install
@@ -22,13 +22,13 @@ cd cs2-gcp
 
 ```bash
 # In Cloud Shell: cloud resources only (network, firewall, static IP, VM, snapshots)
-git clone https://github.com/x2code-co/cs2-gcp-pelican-panel.git cs2-gcp
+git clone https://github.com/sakith-x2code/cs2-gcp-pelican-panel.git cs2-gcp
 cd cs2-gcp && ./cs2-gcp.sh init && ./cs2-gcp.sh infra
 ./cs2-gcp.sh ssh
 
 # On the VM:
 sudo apt-get install -y git
-git clone https://github.com/x2code-co/cs2-gcp-pelican-panel.git cs2
+git clone https://github.com/sakith-x2code/cs2-gcp-pelican-panel.git cs2
 cd cs2 && sudo ./vm-install.sh     # asks for the Steam token etc., then installs
 ```
 

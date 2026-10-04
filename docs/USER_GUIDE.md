@@ -1,6 +1,6 @@
 # CS2 Server on Google Cloud — User Guide
 
-As of Oct 3, 2026 · Source: [github.com/x2code-co/cs2-gcp-pelican-panel](https://github.com/x2code-co/cs2-gcp-pelican-panel) (MIT)
+As of Oct 3, 2026 · Source: [github.com/sakith-x2code/cs2-gcp-pelican-panel](https://github.com/sakith-x2code/cs2-gcp-pelican-panel) (MIT)
 
 ## Overview
 
@@ -88,7 +88,7 @@ Pick one path: **A** does everything from Cloud Shell in one command; **B** crea
 
 1. **Clone the repo** in Cloud Shell:
    ```bash
-   git clone https://github.com/x2code-co/cs2-gcp-pelican-panel.git cs2-gcp
+   git clone https://github.com/sakith-x2code/cs2-gcp-pelican-panel.git cs2-gcp
    cd cs2-gcp
    ```
 2. **Create your config.** Answer the prompts (project ID, GSLT token, server name, join password, region). This writes `cs2.conf` (private, git-ignored); open it with `nano cs2.conf` to review every commented setting.
@@ -112,14 +112,14 @@ Pick one path: **A** does everything from Cloud Shell in one command; **B** crea
 
 1. **Create the cloud resources** from Cloud Shell (same `init` as path A, then `infra` instead of `deploy`), and open a shell on the VM:
    ```bash
-   git clone https://github.com/x2code-co/cs2-gcp-pelican-panel.git cs2-gcp
+   git clone https://github.com/sakith-x2code/cs2-gcp-pelican-panel.git cs2-gcp
    cd cs2-gcp && ./cs2-gcp.sh init && ./cs2-gcp.sh infra
    ./cs2-gcp.sh ssh
    ```
 2. **On the VM, clone and install.** `vm-install.sh` asks for the Steam token, server name, join password and admin IP on first run, saves them to `~/cs2/cs2.conf`, installs everything, and prints the connect string and dashboard login.
    ```bash
    sudo apt-get install -y git
-   git clone https://github.com/x2code-co/cs2-gcp-pelican-panel.git cs2
+   git clone https://github.com/sakith-x2code/cs2-gcp-pelican-panel.git cs2
    cd cs2 && sudo ./vm-install.sh
    ```
 
