@@ -128,6 +128,35 @@ cmd_init() {
   ok "Saved. Review $CONF, then run: ./cs2-gcp.sh deploy"
 }
 
+# Verify the project is reachable; explain the usual causes when it isn't.
+check_project() {
+  local acct="$1" err
+  if err="$("${GC[@]}" compute project-info describe --format='value(name)' 2>&1 >/dev/null)"; then
+    ok "Project $PROJECT_ID"; return
+  fi
+  echo "${R}  ✗ Can't use project ${PROJECT_ID} as ${acct}${N}" >&2
+  echo "    gcloud said: $(echo "$err" | grep -m1 -E 'ERROR|error' || echo "$err" | head -1)" >&2
+  if [[ "$acct" == *-compute@developer.gserviceaccount.com || "$acct" == *.iam.gserviceaccount.com ]]; then
+    cat >&2 <<EOT
+    You're running this on a VM, logged in as its service account, which can't manage
+    Compute Engine. cs2-gcp.sh is meant for Cloud Shell or your own computer.
+      • On this VM, install the server directly instead:  sudo ./vm-install.sh
+      • Or open Cloud Shell (>_ icon in console.cloud.google.com) and run cs2-gcp.sh there.
+EOT
+  elif echo "$err" | grep -qiE 'not found|does not exist|invalid'; then
+    echo "    Check PROJECT_ID in cs2.conf — use the project ID, not its name or number." >&2
+    echo "    Your projects: $(gcloud projects list --format='value(projectId)' 2>/dev/null | tr '\n' ' ')" >&2
+  elif echo "$err" | grep -qiE 'billing'; then
+    echo "    Link a billing account: https://console.cloud.google.com/billing/linkedaccount?project=${PROJECT_ID}" >&2
+  elif echo "$err" | grep -qiE 'has not been used|SERVICE_DISABLED|is disabled'; then
+    log "Enabling Compute Engine API (takes ~1 min)"
+    "${GC[@]}" services enable compute.googleapis.com && { ok "Project $PROJECT_ID"; return; }
+  else
+    echo "    ${acct} needs Owner or Compute Admin on ${PROJECT_ID}, or log in with: gcloud auth login" >&2
+  fi
+  exit 1
+}
+
 cmd_preflight() {
   load_conf
   log "Preflight"
@@ -135,8 +164,7 @@ cmd_preflight() {
   local acct; acct="$(gcloud auth list --filter=status:ACTIVE --format='value(account)' 2>/dev/null | head -1)"
   [[ -n "$acct" ]] || die "Not logged in. Run: gcloud auth login"
   ok "Logged in as $acct"
-  "${GC[@]}" projects describe "$PROJECT_ID" >/dev/null 2>&1 || die "Project $PROJECT_ID not found or no access"
-  ok "Project $PROJECT_ID"
+  check_project "$acct"
   if ! "${GC[@]}" services list --enabled --filter='config.name=compute.googleapis.com' --format='value(config.name)' | grep -q compute; then
     log "Enabling Compute Engine API (first time takes ~1 min)"
     "${GC[@]}" services enable compute.googleapis.com

@@ -256,6 +256,7 @@ Start with `./cs2-gcp.sh status` (or `sudo cs2ctl status` on the VM) and the das
 
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
+| `preflight`: "Can't use project …" / "not found or no access" | Running `cs2-gcp.sh` on the VM (its service account can't manage Compute Engine), a project name/number instead of the ID, or a different gcloud account | On the VM use `sudo ./vm-install.sh` instead; otherwise run from Cloud Shell, check `gcloud config list` and `gcloud projects list`, and put the exact project ID in `cs2.conf` |
 | `preflight`: machine type not offered in zone | C3 capacity differs by zone | Use a zone it lists, or `MACHINE_TYPE="c4-highcpu-4"` with `DISK_TYPE="hyperdisk-balanced"` |
 | `deploy` fails on quota | Region CPU or IP quota too low | IAM & Admin → Quotas → request more "CPUs" for the region |
 | Status stuck on *updating* for 30+ min | Large first download | Normal on first run; check progress with `./cs2-gcp.sh logs` |
