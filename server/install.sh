@@ -246,7 +246,7 @@ TimeoutStartSec=0
 WantedBy=multi-user.target
 EOF
 
-for unit in autoupdate:10min watchdog:2min; do
+for unit in autoupdate:10min watchdog:2min idlecheck:5min; do
   name="${unit%%:*}"; every="${unit##*:}"
   cat >"/etc/systemd/system/cs2-${name}.service" <<EOF
 [Unit]
@@ -275,7 +275,7 @@ systemctl daemon-reload
 systemctl enable --now cs2-dashboard.service >/dev/null 2>&1
 systemctl restart cs2-dashboard.service
 systemctl enable cs2-stack.service >/dev/null 2>&1
-systemctl enable --now cs2-autoupdate.timer cs2-watchdog.timer >/dev/null 2>&1
+systemctl enable --now cs2-autoupdate.timer cs2-watchdog.timer cs2-idlecheck.timer >/dev/null 2>&1
 ok "Services and timers enabled"
 
 # ---------------------------------------------------------------- start

@@ -287,6 +287,24 @@ def list_maps():
     return sorted(names) or FALLBACK_MAPS
 
 
+def idle_info():
+    """Idle auto-stop state written by `cs2ctl idlecheck` (see server/cs2ctl)."""
+    enabled = ENV.get("IDLE_SHUTDOWN", "1") == "1"
+    try:
+        limit = max(10, int(ENV.get("IDLE_SHUTDOWN_MIN", "60")))
+    except ValueError:
+        limit = 60
+    info = {"enabled": enabled, "limit_min": limit, "held": os.path.exists("/run/cs2/idle_hold"),
+            "idle_min": None, "left_min": None}
+    try:
+        with open("/run/cs2/idle_since") as f:
+            idle = int((time.time() - int(f.read().strip())) // 60)
+        info["idle_min"], info["left_min"] = idle, max(0, limit - idle)
+    except (OSError, ValueError):
+        pass
+    return info
+
+
 def docker_logs(n=200):
     n = max(10, min(int(n), 2000))
     _, out = run(["docker", "logs", "--tail", str(n), CONTAINER], timeout=10)
@@ -466,6 +484,7 @@ class State:
                 "presets": list(PRESETS),
                 "history": {k: list(v) for k, v in self.hist.items()},
                 "events": list(self.events),
+                "idle": idle_info(),
                 "config": {
                     "servername": ENV.get("CS2_SERVERNAME", ""),
                     "ip": ENV.get("EXTERNAL_IP", ""),

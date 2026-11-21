@@ -43,7 +43,7 @@ The first start downloads ~60 GB of game files (10–25 min): `sudo cs2ctl logs 
 | Cloud Shell (A) | `git pull && ./cs2-gcp.sh push` |
 | On the VM (B) | `cd ~/cs2 && git pull && sudo ./vm-install.sh` |
 
-CS2 game updates install automatically when the server is empty. Your settings live in `cs2.conf`, which is git-ignored and survives `git pull`.
+CS2 game updates install automatically when the server is empty. The VM also **stops itself after 60 minutes with no players** (disk and IP kept; start it again with `./cs2-gcp.sh start`). Tune or disable with `IDLE_SHUTDOWN_MIN` / `IDLE_SHUTDOWN=0` in `cs2.conf`; check or pause it on the VM with `sudo cs2ctl idle [status|hold|resume]`. Your settings live in `cs2.conf`, which is git-ignored and survives `git pull`.
 
 ## Commands
 
@@ -61,7 +61,7 @@ From Cloud Shell (`./cs2-gcp.sh help`):
 | `rcon "<cmd>"`, `logs [N]`, `ssh` | console command · server log · shell |
 | `snapshot`, `resize <type>`, `destroy` | manual backup · change VM size · remove everything |
 
-On the VM (`sudo cs2ctl help`): `status`, `start`, `stop`, `restart`, `update`, `upgrade`, `rcon`, `say`, `logs [-f]`, `console`, `config`.
+On the VM (`sudo cs2ctl help`): `status`, `start`, `stop`, `restart`, `update`, `upgrade`, `rcon`, `say`, `logs [-f]`, `console`, `config`, `idle [status|hold|resume]`.
 
 ## Repository layout
 

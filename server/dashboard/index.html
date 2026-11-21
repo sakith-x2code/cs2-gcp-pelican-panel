@@ -175,6 +175,7 @@ pre.term .cmd{color:var(--accent)} pre.term .err{color:var(--bad)}
         <tr><td>Load avg</td><td class="num" id="i_load">–</td></tr>
         <tr><td>UDP receive errors</td><td class="num" id="i_udp">–</td></tr>
         <tr><td>VM uptime</td><td class="num" id="i_vmup">–</td></tr>
+        <tr><td>Idle auto-stop</td><td class="num" id="i_idle">–</td></tr>
       </table>
       <div class="sub">Join password (until restart)</div>
       <div class="row"><input id="pw" placeholder="empty = no password" maxlength="32"><button id="pwbtn">Set</button></div>
@@ -314,6 +315,10 @@ function render(s){
   $("i_udp").textContent = h.udp_errors ?? "–";
   $("i_udp").style.color = h.udp_errors>0 ? "var(--bad)" : "";
   $("i_vmup").textContent = fmtDur(h.uptime);
+  const idle=s.idle||{}, ie=$("i_idle");
+  ie.textContent = !idle.enabled ? "off" : idle.held ? "paused until reboot"
+    : idle.left_min!=null ? `VM stops in ~${idle.left_min} min` : `after ${idle.limit_min} min empty`;
+  ie.style.color = idle.enabled && !idle.held && idle.left_min!=null && idle.left_min<=15 ? "var(--warn)" : "";
   $("updbanner").style.display = b.update_available ? "flex" : "none";
   $("updtext").textContent = `CS2 update available (build ${b.latest}). ${cfg.auto_update?"It installs automatically once the server is empty.":""}`;
 

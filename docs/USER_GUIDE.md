@@ -141,7 +141,17 @@ Friends join with the server IP on port 27015 and the join password, if you set 
 
 Game mode, start map and bots are set in `cs2.conf` (`CS2_GAMEALIAS`, `CS2_STARTMAP`, `CS2_BOT_QUOTA`) and can be changed live from the dashboard.
 
-**Saving money between sessions:** `./cs2-gcp.sh stop` after playing and `./cs2-gcp.sh start` before. The IP stays the same, so friends keep the same connect string; the game is ready about 2 minutes after start.
+**Saving money between sessions:** run `./cs2-gcp.sh start` before playing. You don't need to remember to stop it: the VM powers itself off after 60 minutes with nobody connected (see [Idle auto-stop](#idle-auto-stop)). You can still stop it right away with `./cs2-gcp.sh stop`. The IP stays the same, so friends keep the same connect string; the game is ready about 2 minutes after start.
+
+### Idle auto-stop
+
+The VM stops itself when nobody has played for an hour, so a forgotten server can't run up the bill.
+
+- **How it works:** a timer on the VM checks every 5 minutes. When the server has had 0 human players (bots don't count) for `IDLE_SHUTDOWN_MIN` minutes, the VM powers off. Google Cloud then shows it as *Stopped* (status `TERMINATED`): this is a stop, not a delete. The disk, game files, settings and static IP are all kept, and compute billing ends.
+- **Start it again:** `./cs2-gcp.sh start` from Cloud Shell, or **Start** on the VM in the Cloud Console. You get a fresh hour from boot to join.
+- **What resets the clock:** any human player connected; anyone logged in to the VM over SSH; a CS2 download or update in progress. If the game itself isn't answering, that counts as empty, so a crashed server still stops.
+- **Check or pause it:** the dashboard's **Server** panel shows "VM stops in ~N min". On the VM, `sudo cs2ctl idle` shows the same, `sudo cs2ctl idle hold` pauses it until the next reboot, and `sudo cs2ctl idle resume` turns it back on.
+- **Change or turn off:** set `IDLE_SHUTDOWN_MIN` (minimum 10) or `IDLE_SHUTDOWN=0` in `cs2.conf`, then `./cs2-gcp.sh push` (or `sudo ./vm-install.sh` on the VM).
 
 ## Using the dashboard
 
@@ -221,6 +231,7 @@ Each item below is applied automatically by the installer; none needs manual set
 | No memory crashes | 4 GB swap, low swappiness; 8 GB RAM |
 | Survives crashes | Docker restarts the container on exit (`unless-stopped`); systemd brings the stack up at boot |
 | Survives hangs | Watchdog checks RCON every 2 minutes; after 3 failures (~6 min) it restarts the server, skipping boot and update windows |
+| No forgotten bills | Idle auto-stop powers off the VM after 60 minutes with no players; disk and IP are kept |
 | Always current | Auto-update checks Steam every 10 minutes; installs when the server is empty, or after 90 minutes with an in-game warning |
 | Survives Google maintenance | Live migration plus automatic restart on host failure |
 | Recoverable | Daily snapshots kept 7 days; manual `snapshot` any time |
@@ -269,5 +280,6 @@ Start with `./cs2-gcp.sh status` (or `sudo cs2ctl status` on the VM) and the das
 | `ssh` times out after locking `ADMIN_CIDR` | IAP not allowed for your account | Grant yourself the *IAP-secured Tunnel User* role, or set `SSH_VIA_IAP=0` and include your IP |
 | `git pull` on the VM refuses (local changes) | A tracked file was edited on the VM | Keep edits in `cs2.conf` only; `git stash` then pull |
 | Something broke after a change | Bad config or update | Compute Engine → Snapshots → create a disk from yesterday's snapshot, or `./cs2-gcp.sh destroy` and `deploy` again |
+| VM stopped by itself | Idle auto-stop: no players for 60 minutes | Expected. `./cs2-gcp.sh start`; to keep it on longer, raise `IDLE_SHUTDOWN_MIN` or run `sudo cs2ctl idle hold` |
 
-On the VM, `journalctl -t cs2ctl` shows every automatic update and watchdog restart.
+On the VM, `journalctl -t cs2ctl` shows every automatic update, watchdog restart and idle auto-stop.

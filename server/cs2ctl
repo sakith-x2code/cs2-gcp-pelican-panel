@@ -10,6 +10,9 @@ mkdir -p "$STATE"
 # shellcheck disable=SC1091
 [[ -f "$BASE/cs2.env" ]] && source "$BASE/cs2.env"
 : "${AUTO_UPDATE:=1}" "${UPDATE_FORCE_AFTER_MIN:=90}" "${WATCHDOG:=1}"
+: "${IDLE_SHUTDOWN:=1}" "${IDLE_SHUTDOWN_MIN:=60}"
+[[ "$IDLE_SHUTDOWN_MIN" =~ ^[0-9]+$ && "$IDLE_SHUTDOWN_MIN" -ge 10 ]] || IDLE_SHUTDOWN_MIN=60
+RUN=/run/cs2            # tmpfs: idle tracking resets on every boot
 
 log() { echo "$(date '+%F %T') $*"; logger -t cs2ctl -- "$*" 2>/dev/null || true; }
 need_root() { [[ $EUID -eq 0 ]] || { echo "Run with sudo"; exit 1; }; }
@@ -35,10 +38,14 @@ cs2ctl — CS2 server control
   config              show active settings (secrets hidden)
   autoupdate          (timer) apply CS2 updates when safe
   watchdog            (timer) restart a hung server
+  idle [status|hold|resume]
+                      idle auto-stop: show minutes left, pause until reboot, or re-enable
+  idlecheck           (timer) power off the VM after IDLE_SHUTDOWN_MIN with no players
 EOF
 }
 
 cmd_status() {
+  cmd_idle status
   local s; s="$(cstate)"
   echo "Container: $s$(updating && echo ' (downloading/updating game files)')"
   [[ "$s" == running ]] || return 0
@@ -107,6 +114,48 @@ cmd_watchdog() {
   fi
 }
 
+# ---------------------------------------------------------------- idle auto-stop
+# Every 5 min: if no human players (and nobody logged in over SSH) for IDLE_SHUTDOWN_MIN,
+# power off. On GCP a guest power-off STOPS the VM (status TERMINATED): disk, game files
+# and static IP are kept, compute billing stops. Start it again with ./cs2-gcp.sh start.
+idle_reset() { rm -f "$RUN/idle_since"; }
+
+cmd_idlecheck() {
+  mkdir -p "$RUN"
+  if [[ "$IDLE_SHUTDOWN" != "1" || -f "$RUN/idle_hold" ]]; then idle_reset; exit 0; fi
+  if updating; then idle_reset; exit 0; fi                     # never stop mid-download/update
+  local sessions; sessions="$( (who 2>/dev/null || true) | wc -l)"
+  if [[ "$sessions" -gt 0 ]]; then idle_reset; exit 0; fi      # an admin is logged in
+  local h; h="$(humans)"
+  if [[ "$h" -gt 0 ]]; then idle_reset; exit 0; fi
+  # 0 humans, or the game isn't answering (nobody can be playing)
+  local now since; now="$(date +%s)"
+  [[ -f "$RUN/idle_since" ]] || { echo "$now" >"$RUN/idle_since"; log "Idle: no players, auto-stop in ${IDLE_SHUTDOWN_MIN} min"; }
+  since="$(cat "$RUN/idle_since")"
+  local idle_min=$(( (now - since) / 60 ))
+  if [[ "$idle_min" -ge "$IDLE_SHUTDOWN_MIN" ]]; then
+    log "Idle: no players for ${idle_min} min — powering off the VM"
+    idle_reset
+    systemctl poweroff
+  fi
+}
+
+cmd_idle() {
+  mkdir -p "$RUN"
+  case "${1:-status}" in
+    hold)   need_root; touch "$RUN/idle_hold"; idle_reset; echo "Idle auto-stop paused until the next reboot (resume: cs2ctl idle resume)";;
+    resume) need_root; rm -f "$RUN/idle_hold"; echo "Idle auto-stop active";;
+    status)
+      if [[ "$IDLE_SHUTDOWN" != "1" ]]; then echo "Idle auto-stop: disabled (IDLE_SHUTDOWN=0)"
+      elif [[ -f "$RUN/idle_hold" ]]; then echo "Idle auto-stop: paused until reboot"
+      elif [[ -f "$RUN/idle_since" ]]; then
+        local m=$(( ($(date +%s) - $(cat "$RUN/idle_since")) / 60 ))
+        echo "Idle auto-stop: no players for ${m} min — VM powers off in ~$(( IDLE_SHUTDOWN_MIN - m > 0 ? IDLE_SHUTDOWN_MIN - m : 0 )) min"
+      else echo "Idle auto-stop: armed (${IDLE_SHUTDOWN_MIN} min with no players)"; fi;;
+    *) echo "Usage: cs2ctl idle [status|hold|resume]"; exit 1;;
+  esac
+}
+
 cmd="${1:-help}"; shift || true
 case "$cmd" in
   status)     cmd_status ;;
@@ -122,6 +171,8 @@ case "$cmd" in
   config)     grep -vE 'PW|PASSWORD|TOKEN' "$BASE/cs2.env" ;;
   autoupdate) cmd_autoupdate ;;
   watchdog)   cmd_watchdog ;;
+  idlecheck)  cmd_idlecheck ;;
+  idle)       cmd_idle "${1:-status}" ;;
   help|-h|--help) usage ;;
   *) usage; exit 1 ;;
 esac
