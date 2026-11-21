@@ -1,6 +1,6 @@
 # cs2-gcp — Counter-Strike 2 server on Google Cloud, with a web dashboard
 
-Scripts that build a tuned CS2 dedicated server on a Google Cloud VM and manage it day to day: live stats, player list, map/mode changes, RCON console, logs, automatic updates and a crash watchdog.
+Scripts that build a tuned CS2 dedicated server on a Google Cloud VM and manage it day to day: live stats, player list, map/mode changes, RCON console, logs, automatic updates, a crash watchdog and an idle auto-stop that shuts the VM down when nobody is playing.
 
 **Stack (all open source):** Ubuntu 24.04 · Docker · [`joedwards32/cs2`](https://github.com/joedwards32/CS2) game image (MIT) · [Caddy](https://caddyserver.com) for HTTPS + login · built-in dashboard (Python standard library). Pelican Panel was evaluated and not used: it is built for multi-server hosting and adds a database, Wings daemon and eggs that one server doesn't need (see `docs/USER_GUIDE.md`).
 
@@ -43,7 +43,29 @@ The first start downloads ~60 GB of game files (10–25 min): `sudo cs2ctl logs 
 | Cloud Shell (A) | `git pull && ./cs2-gcp.sh push` |
 | On the VM (B) | `cd ~/cs2 && git pull && sudo ./vm-install.sh` |
 
-CS2 game updates install automatically when the server is empty. The VM also **stops itself after 60 minutes with no players** (disk and IP kept; start it again with `./cs2-gcp.sh start`). Tune or disable with `IDLE_SHUTDOWN_MIN` / `IDLE_SHUTDOWN=0` in `cs2.conf`; check or pause it on the VM with `sudo cs2ctl idle [status|hold|resume]`. Your settings live in `cs2.conf`, which is git-ignored and survives `git pull`.
+CS2 game updates install automatically when the server is empty. Your settings live in `cs2.conf`, which is git-ignored and survives `git pull`.
+
+## Idle auto-stop
+
+The VM **stops itself after 60 minutes with no players**, so a forgotten server doesn't keep billing.
+
+- A systemd timer (`cs2-idlecheck.timer`) runs `cs2ctl idlecheck` every 5 minutes. After `IDLE_SHUTDOWN_MIN` minutes with 0 human players (bots don't count), it powers off the VM.
+- This is a **stop, not a delete**: Google Cloud shows the VM as `TERMINATED`, but the disk, game files, settings and static IP are kept and compute billing ends. Start it again with `./cs2-gcp.sh start` (or **Start** in the Cloud Console); each boot gets a fresh hour.
+- The countdown resets while a player is connected, while anyone is logged in over SSH, and during CS2 downloads/updates. A server that isn't answering counts as empty.
+- The dashboard shows "VM stops in ~N min". On the VM:
+
+```bash
+sudo cs2ctl idle           # time left
+sudo cs2ctl idle hold      # pause until the next reboot
+sudo cs2ctl idle resume    # turn it back on
+```
+
+Settings in `cs2.conf` (apply with `./cs2-gcp.sh push` or `sudo ./vm-install.sh`):
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `IDLE_SHUTDOWN` | `1` | `0` turns idle auto-stop off |
+| `IDLE_SHUTDOWN_MIN` | `60` | minutes with no players before the VM stops (minimum 10) |
 
 ## Commands
 
@@ -56,7 +78,7 @@ From Cloud Shell (`./cs2-gcp.sh help`):
 | `infra` | cloud resources only (for install path B) |
 | `push` | apply `cs2.conf` changes and updated scripts to the VM |
 | `info`, `status` | connection details · live status |
-| `start`, `stop` | start / stop the VM (stop when not playing to save money) |
+| `start`, `stop` | start / stop the VM (it also stops itself after 60 min with no players) |
 | `restart`, `update`, `upgrade` | restart game · install CS2 update · pull newest image |
 | `rcon "<cmd>"`, `logs [N]`, `ssh` | console command · server log · shell |
 | `snapshot`, `resize <type>`, `destroy` | manual backup · change VM size · remove everything |
@@ -70,7 +92,7 @@ cs2-gcp.sh            Cloud Shell CLI (gcloud: network, firewall, IP, VM, snapsh
 vm-install.sh         run ON the VM: first-time setup or update from this checkout
 cs2.conf.example      every setting, documented (copy to cs2.conf; git-ignored)
 server/install.sh     idempotent installer: Docker, OS tuning, CS2 container, Caddy, dashboard, timers
-server/cs2ctl         on-VM management CLI + auto-update / watchdog jobs
+server/cs2ctl         on-VM management CLI + auto-update / watchdog / idle auto-stop jobs
 server/dashboard/     web dashboard (app.py API + index.html UI)
 docs/USER_GUIDE.md    installation, specifications, setup, operations, troubleshooting
 ```
