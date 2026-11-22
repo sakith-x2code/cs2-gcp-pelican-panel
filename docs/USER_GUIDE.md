@@ -212,7 +212,7 @@ You can manage the server entirely from the Google Cloud Console's built-in SSH 
    | Run a console command | `sudo cs2ctl rcon "changelevel de_mirage"` |
    | Restart or update CS2 | `sudo cs2ctl restart` · `sudo cs2ctl update` |
    | Idle auto-stop time left | `sudo cs2ctl idle` |
-   | Show the dashboard login | `sudo grep -E 'DASH_USER\|DASH_PASSWORD' /opt/cs2/cs2.env` |
+   | Show the dashboard login | `sudo grep DASH_ /opt/cs2/cs2.env` |
 
 4. **Close the window** when you're done. While it's open you count as logged in, so idle auto-stop waits; it starts counting again once you close it.
 
