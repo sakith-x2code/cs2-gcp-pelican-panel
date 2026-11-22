@@ -36,6 +36,10 @@ Already have a VM? It needs Ubuntu 22.04/24.04 or Debian 12 (x86_64), 4 vCPU / 8
 
 The first start downloads ~60 GB of game files (10–25 min): `sudo cs2ctl logs -f`.
 
+### No terminal? Use SSH in the browser
+
+In the Cloud Console, open **Compute Engine → VM instances**, click **SSH** on `cs2-server` (click **Start** first if it's stopped), then run the "On the VM" commands above. Updates, settings and `sudo cs2ctl …` commands all work there. Step-by-step: [Using SSH in the browser](docs/USER_GUIDE.md#using-ssh-in-the-browser).
+
 ## Updating
 
 | Where you installed from | Update scripts/dashboard and apply config changes |

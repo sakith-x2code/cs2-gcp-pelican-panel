@@ -194,6 +194,34 @@ Run these from the `cs2-gcp` folder in Cloud Shell. Commands that touch the game
 | `./cs2-gcp.sh resize c3-highcpu-8` | Change machine size (about 1 minute of downtime) |
 | `./cs2-gcp.sh destroy` | Delete everything except existing snapshots (asks you to type the VM name) |
 
+### Using SSH in the browser
+
+You can manage the server entirely from the Google Cloud Console's built-in SSH window, with nothing installed on your computer. This shell runs **on the VM**, so use `vm-install.sh` and `cs2ctl` here; `cs2-gcp.sh` is only for Cloud Shell.
+
+1. **Open it.** Go to [Compute Engine → VM instances](https://console.cloud.google.com/compute/instances), find `cs2-server`, and click **SSH** in its row. If the VM shows *Stopped* (for example after idle auto-stop), click **⋮ → Start / Resume** first and wait about a minute.
+2. **Authorize.** On first use, click **Authorize** so Google can add a temporary SSH key. A terminal opens in a new window, logged in as your Google username.
+3. **Run what you need:**
+
+   | Task | Command |
+   | --- | --- |
+   | First install | `sudo apt-get install -y git && git clone https://github.com/sakith-x2code/cs2-gcp-pelican-panel.git cs2 && cd cs2 && sudo ./vm-install.sh` |
+   | Update scripts and dashboard | `cd ~/cs2 && git pull && sudo ./vm-install.sh` |
+   | Change settings | `nano ~/cs2/cs2.conf` (save: Ctrl+O, Enter; exit: Ctrl+X), then `cd ~/cs2 && sudo ./vm-install.sh` |
+   | Status and players | `sudo cs2ctl status` |
+   | Follow the live log | `sudo cs2ctl logs -f` (stop with Ctrl+C) |
+   | Run a console command | `sudo cs2ctl rcon "changelevel de_mirage"` |
+   | Restart or update CS2 | `sudo cs2ctl restart` · `sudo cs2ctl update` |
+   | Idle auto-stop time left | `sudo cs2ctl idle` |
+   | Show the dashboard login | `sudo grep -E 'DASH_USER\|DASH_PASSWORD' /opt/cs2/cs2.env` |
+
+4. **Close the window** when you're done. While it's open you count as logged in, so idle auto-stop waits; it starts counting again once you close it.
+
+Tips:
+- **Copy and paste:** select text to copy; paste with Ctrl+V (Cmd+V on Mac), or right-click → Paste.
+- **Move files:** the gear icon at the top right of the SSH window has **Upload file** and **Download file**. Uploads land in your home folder.
+- **Can't find `~/cs2`?** The browser session logs in as your Google username, which can differ from the user that cloned the repo through `gcloud`. Run `ls -d /home/*/cs2` to find it, or just clone it again; the server itself lives in `/opt/cs2` and is unaffected.
+- **"Connection failed" or it hangs:** the firewall must allow TCP 22 from Google's range `35.235.240.0/20`. `./cs2-gcp.sh deploy` or `infra` creates this rule (`cs2-server-iap`); on a VM you made yourself, add it under VPC network → Firewall.
+
 ### Changing settings
 
 1. Edit `cs2.conf` (e.g. server name, max players, start map, join password, bots).
@@ -280,6 +308,7 @@ Start with `./cs2-gcp.sh status` (or `sudo cs2ctl status` on the VM) and the das
 | `ssh` times out after locking `ADMIN_CIDR` | IAP not allowed for your account | Grant yourself the *IAP-secured Tunnel User* role, or set `SSH_VIA_IAP=0` and include your IP |
 | `git pull` on the VM refuses (local changes) | A tracked file was edited on the VM | Keep edits in `cs2.conf` only; `git stash` then pull |
 | Something broke after a change | Bad config or update | Compute Engine → Snapshots → create a disk from yesterday's snapshot, or `./cs2-gcp.sh destroy` and `deploy` again |
+| Browser SSH says "connection failed" | Firewall doesn't allow Google's SSH relay | Allow TCP 22 from `35.235.240.0/20` (rule `cs2-server-iap`, created by `deploy`/`infra`) |
 | VM stopped by itself | Idle auto-stop: no players for 60 minutes | Expected. `./cs2-gcp.sh start`; to keep it on longer, raise `IDLE_SHUTDOWN_MIN` or run `sudo cs2ctl idle hold` |
 
 On the VM, `journalctl -t cs2ctl` shows every automatic update, watchdog restart and idle auto-stop.
