@@ -32,6 +32,8 @@ if [[ ! -f "$CONF" ]]; then
     read -r -p "Server name [Friends CS2]: " a;        [[ -n "$a" ]] && set_kv "$CONF" CS2_SERVERNAME "$a"
     read -r -p "Join password (empty = none): " a;     [[ -n "$a" ]] && set_kv "$CONF" CS2_PW "$a"
     read -r -p "Admin IP/CIDR for dashboard+SSH [0.0.0.0/0]: " a; [[ -n "$a" ]] && set_kv "$CONF" ADMIN_CIDR "$a"
+    echo "Phone notifications: install the ntfy app and subscribe to a long random topic name."
+    read -r -p "ntfy topic (empty = skip): " a;        [[ -n "$a" ]] && set_kv "$CONF" NOTIFY_NTFY_TOPIC "$a"
   else
     echo "Non-interactive: edit $CONF (at least SRCDS_TOKEN), then re-run."
   fi
@@ -58,6 +60,7 @@ Dashboard
   URL:        https://${domain}   (fallback: https://${EXTERNAL_IP})
   Login:      ${DASH_USER:-admin} / ${DASH_PASSWORD}
 Manage:       sudo cs2ctl help
+Notify test:  sudo cs2ctl notify test   (set NOTIFY_NTFY_TOPIC in cs2.conf first)
 
 First start downloads ~60 GB of game files (10–25 min). Follow it with: sudo cs2ctl logs -f
 Firewall: the VM needs UDP 27015 open to everyone and TCP 80/443 open to your admin IP

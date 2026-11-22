@@ -50,4 +50,12 @@ UPDATE_FORCE_AFTER_MIN=90        # if players stay on, force the update after th
 WATCHDOG=1                       # restart the game if it stops answering for ~6 minutes
 IDLE_SHUTDOWN=1                  # power off (stop) the VM when nobody has played for IDLE_SHUTDOWN_MIN
 IDLE_SHUTDOWN_MIN=60             # minutes with 0 players (and no SSH session) before the VM stops
+
+# ---------------------------------------------------------------- Notifications (optional)
+# Phone push via the free ntfy app (https://ntfy.sh): install it and subscribe to the topic below.
+# Pick a long, random topic name: anyone who knows it can read the messages.
+NOTIFY_NTFY_TOPIC=""             # e.g. "cs2-sakith-7Kq2pX9d"; empty = off
+NOTIFY_NTFY_SERVER="https://ntfy.sh"   # or your own self-hosted ntfy server
+NOTIFY_DISCORD_WEBHOOK=""        # Discord webhook URL (Channel settings > Integrations > Webhooks); empty = off
+
 SSH_VIA_IAP="auto"               # auto = use IAP tunnel when ADMIN_CIDR is restricted | 1 = always | 0 = never

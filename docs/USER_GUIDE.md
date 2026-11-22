@@ -150,8 +150,39 @@ The VM stops itself when nobody has played for an hour, so a forgotten server ca
 - **How it works:** a timer on the VM checks every 5 minutes. When the server has had 0 human players (bots don't count) for `IDLE_SHUTDOWN_MIN` minutes, the VM powers off. Google Cloud then shows it as *Stopped* (status `TERMINATED`): this is a stop, not a delete. The disk, game files, settings and static IP are all kept, and compute billing ends.
 - **Start it again:** `./cs2-gcp.sh start` from Cloud Shell, or **Start** on the VM in the Cloud Console. You get a fresh hour from boot to join.
 - **What resets the clock:** any human player connected; anyone logged in to the VM over SSH; a CS2 download or update in progress. If the game itself isn't answering, that counts as empty, so a crashed server still stops.
+- **Get a heads-up:** with [phone notifications](#phone-notifications) on, you get a message 10 minutes before the VM stops.
 - **Check or pause it:** the dashboard's **Server** panel shows "VM stops in ~N min". On the VM, `sudo cs2ctl idle` shows the same, `sudo cs2ctl idle hold` pauses it until the next reboot, and `sudo cs2ctl idle resume` turns it back on.
 - **Change or turn off:** set `IDLE_SHUTDOWN_MIN` (minimum 10) or `IDLE_SHUTDOWN=0` in `cs2.conf`, then `./cs2-gcp.sh push` (or `sudo ./vm-install.sh` on the VM).
+
+### Phone notifications
+
+The VM can message your phone when the server comes up, goes down or stops. It uses [ntfy](https://ntfy.sh), a free, open-source push app with no account needed. It can also post the same messages to a Discord channel so your friends see them.
+
+**Set up ntfy (about 3 minutes):**
+
+1. **Install the app:** search "ntfy" in the Google Play Store, F-Droid or the iPhone App Store.
+2. **Pick a topic name.** Make it long and random, such as `cs2-sakith-7Kq2pX9d`: anyone who knows the name can read the messages. In the app, tap **+**, enter the topic, leave the server as `ntfy.sh`, and tap **Subscribe**.
+3. **Tell the server.** On the VM (browser SSH works), run `nano ~/cs2/cs2.conf`, set `NOTIFY_NTFY_TOPIC="cs2-sakith-7Kq2pX9d"`, save, then `cd ~/cs2 && sudo ./vm-install.sh`. From Cloud Shell instead: edit `cs2.conf` and run `./cs2-gcp.sh push`.
+4. **Test it:** `sudo cs2ctl notify test` on the VM. A message should arrive within seconds.
+
+Friends can subscribe to the same topic in their own ntfy app.
+
+**Discord (optional):** in your Discord server, open the channel's **Edit Channel → Integrations → Webhooks → New Webhook → Copy Webhook URL**. Put it in `NOTIFY_DISCORD_WEBHOOK="…"` in `cs2.conf` and apply as in step 3. You can use ntfy, Discord or both.
+
+**What you'll get:**
+
+| Event | Message |
+| --- | --- |
+| VM boots | "CS2 VM started": the game is coming up |
+| Game is joinable | "CS2 server is online" with `connect <IP>:27015` (the join password itself is never sent) |
+| CS2 update starts | "CS2 server is updating": back in a few minutes |
+| Game stops answering | "CS2 server is down"; "CS2 server restarting" if the watchdog has to restart it |
+| 10 minutes before idle auto-stop | "CS2 VM stops in ~10 min": join to keep it running |
+| VM shuts down | "CS2 VM stopped" with the reason (for example, idle auto-stop) |
+
+Tapping an ntfy notification opens the dashboard.
+
+Messages come from the VM itself. A normal stop (idle auto-stop, `./cs2-gcp.sh stop`, or **Stop** in the Cloud Console) still sends "CS2 VM stopped". A sudden hardware failure on Google's side can't send anything; you'll get "CS2 VM started" when it comes back. Delivery problems are logged and never block a shutdown or restart: check them with `journalctl -t cs2ctl`.
 
 ## Using the dashboard
 
@@ -309,6 +340,7 @@ Start with `./cs2-gcp.sh status` (or `sudo cs2ctl status` on the VM) and the das
 | `git pull` on the VM refuses (local changes) | A tracked file was edited on the VM | Keep edits in `cs2.conf` only; `git stash` then pull |
 | Something broke after a change | Bad config or update | Compute Engine → Snapshots → create a disk from yesterday's snapshot, or `./cs2-gcp.sh destroy` and `deploy` again |
 | Browser SSH says "connection failed" | Firewall doesn't allow Google's SSH relay | Allow TCP 22 from `35.235.240.0/20` (rule `cs2-server-iap`, created by `deploy`/`infra`) |
+| No phone notifications | Topic not set or mistyped, or not subscribed in the app | Compare `NOTIFY_NTFY_TOPIC` in `cs2.conf` with the app's topic exactly, re-run `sudo ./vm-install.sh`, then `sudo cs2ctl notify test`; failures show in `journalctl -t cs2ctl` |
 | VM stopped by itself | Idle auto-stop: no players for 60 minutes | Expected. `./cs2-gcp.sh start`; to keep it on longer, raise `IDLE_SHUTDOWN_MIN` or run `sudo cs2ctl idle hold` |
 
 On the VM, `journalctl -t cs2ctl` shows every automatic update, watchdog restart and idle auto-stop.

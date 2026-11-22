@@ -13,6 +13,7 @@ mkdir -p "$STATE"
 : "${IDLE_SHUTDOWN:=1}" "${IDLE_SHUTDOWN_MIN:=60}"
 [[ "$IDLE_SHUTDOWN_MIN" =~ ^[0-9]+$ && "$IDLE_SHUTDOWN_MIN" -ge 10 ]] || IDLE_SHUTDOWN_MIN=60
 RUN=/run/cs2            # tmpfs: idle tracking resets on every boot
+: "${NOTIFY_NTFY_SERVER:=https://ntfy.sh}" "${NOTIFY_NTFY_TOPIC:=}" "${NOTIFY_DISCORD_WEBHOOK:=}"
 
 log() { echo "$(date '+%F %T') $*"; logger -t cs2ctl -- "$*" 2>/dev/null || true; }
 need_root() { [[ $EUID -eq 0 ]] || { echo "Run with sudo"; exit 1; }; }
@@ -41,6 +42,7 @@ cs2ctl — CS2 server control
   idle [status|hold|resume]
                       idle auto-stop: show minutes left, pause until reboot, or re-enable
   idlecheck           (timer) power off the VM after IDLE_SHUTDOWN_MIN with no players
+  notify test         send a test notification (ntfy app and/or Discord, see cs2.conf)
 EOF
 }
 
@@ -99,6 +101,7 @@ cmd_autoupdate() {
 }
 
 cmd_watchdog() {
+  track_game_state
   [[ "$WATCHDOG" == "1" ]] || exit 0
   [[ "$(cstate)" == running ]] || { rm -f "$STATE/watchdog_fails"; exit 0; }
   updating && exit 0
@@ -109,16 +112,76 @@ cmd_watchdog() {
   log "Watchdog: game not answering RCON ($n/3)"
   if [[ "$n" -ge 3 ]]; then
     log "Watchdog: restarting hung server"
+    notify "CS2 server restarting" "The game was unresponsive for ~6 min, so the watchdog is restarting it." "warning"
     rm -f "$STATE/watchdog_fails"
     docker restart -t 20 "$C" >/dev/null
   fi
+}
+
+# ---------------------------------------------------------------- notifications
+# Push to the ntfy phone app (NOTIFY_NTFY_TOPIC) and/or a Discord channel (NOTIFY_DISCORD_WEBHOOK).
+# Never fails the caller: a notification problem must not stop a shutdown or a restart.
+addr() { echo "${EXTERNAL_IP:-?}:27015"; }
+dash_url() { echo "https://${DASH_DOMAIN:-${EXTERNAL_IP//./-}.sslip.io}"; }
+
+notify() {   # notify <title> <message> [ntfy-tags] [priority 1-5]
+  local title="$1" msg="$2" tags="${3:-}" prio="${4:-3}" sent=0
+  if [[ -n "$NOTIFY_NTFY_TOPIC" ]]; then
+    if curl -fsS -m 10 -o /dev/null \
+      -H "Title: $title" -H "Tags: $tags" -H "Priority: $prio" -H "Click: $(dash_url)" \
+      --data-binary "$msg" "${NOTIFY_NTFY_SERVER%/}/${NOTIFY_NTFY_TOPIC}" 2>/dev/null; then sent=1; else log "notify: ntfy send failed"; fi
+  fi
+  if [[ -n "$NOTIFY_DISCORD_WEBHOOK" ]]; then
+    local body
+    body="$(python3 -c 'import json,sys; print(json.dumps({"username":"CS2 server","content":"**"+sys.argv[1]+"**\n"+sys.argv[2]}))' "$title" "$msg")"
+    if curl -fsS -m 10 -o /dev/null -H 'Content-Type: application/json' -d "$body" "$NOTIFY_DISCORD_WEBHOOK" 2>/dev/null; then
+      sent=1; else log "notify: Discord send failed"; fi
+  fi
+  if [[ "$sent" == 1 ]]; then log "notify: $title"; fi
+  return 0
+}
+
+# Called every 2 min (watchdog timer): tell people when the game comes online or goes down.
+track_game_state() {
+  mkdir -p "$RUN"
+  local prev now h; prev="$(cat "$RUN/game_state" 2>/dev/null || echo boot)"
+  if [[ "$(cstate)" == running ]] && updating; then now=updating
+  else h="$(humans)"; if [[ "$h" -ge 0 ]]; then now=online; else now=offline; fi; fi
+  [[ "$now" == "$prev" ]] && return 0
+  echo "$now" >"$RUN/game_state"
+  case "$now" in
+    online)   notify "CS2 server is online" "Join: connect $(addr)${CS2_PW:+ (password required)}" "green_circle,video_game" 4 ;;
+    updating) if [[ "$prev" == online ]]; then notify "CS2 server is updating" "Downloading a CS2 update. Back online in a few minutes." "arrows_counterclockwise"; fi ;;
+    offline)  if [[ "$prev" == online ]]; then notify "CS2 server is down" "The game stopped answering. The watchdog restarts it after ~6 min if it doesn't recover." "red_circle,warning" 4; fi ;;
+  esac
+  return 0
+}
+
+cmd_notify() {
+  case "${1:-test}" in
+    test)
+      [[ -n "$NOTIFY_NTFY_TOPIC$NOTIFY_DISCORD_WEBHOOK" ]] || { echo "No notifications configured: set NOTIFY_NTFY_TOPIC and/or NOTIFY_DISCORD_WEBHOOK in cs2.conf, then sudo ./vm-install.sh"; exit 1; }
+      notify "CS2 test notification" "Notifications from $(hostname) work. Server: $(addr)" "white_check_mark"
+      echo "Sent. Check your phone${NOTIFY_DISCORD_WEBHOOK:+ / Discord}." ;;
+    boot)     # cs2-notify.service start
+      mkdir -p "$RUN"; echo boot >"$RUN/game_state"
+      notify "CS2 VM started" "The game server is starting; you'll get another message when it's joinable (1-2 min, longer if updating)." "rocket" ;;
+    shutdown) # cs2-notify.service stop (VM powering off or rebooting)
+      local reason; reason="$(cat "$RUN/stop_reason" 2>/dev/null || true)"
+      if systemctl list-jobs 2>/dev/null | grep -q 'reboot.target'; then
+        notify "CS2 VM rebooting" "${reason:-The VM is rebooting.} Back in a few minutes." "arrows_counterclockwise"
+      else
+        notify "CS2 VM stopped" "${reason:-The VM is shutting down.} Start it again with ./cs2-gcp.sh start or the Cloud Console." "black_circle,zzz"
+      fi ;;
+    *) echo "Usage: cs2ctl notify test"; exit 1 ;;
+  esac
 }
 
 # ---------------------------------------------------------------- idle auto-stop
 # Every 5 min: if no human players (and nobody logged in over SSH) for IDLE_SHUTDOWN_MIN,
 # power off. On GCP a guest power-off STOPS the VM (status TERMINATED): disk, game files
 # and static IP are kept, compute billing stops. Start it again with ./cs2-gcp.sh start.
-idle_reset() { rm -f "$RUN/idle_since"; }
+idle_reset() { rm -f "$RUN/idle_since" "$RUN/idle_warned"; }
 
 cmd_idlecheck() {
   mkdir -p "$RUN"
@@ -135,8 +198,12 @@ cmd_idlecheck() {
   local idle_min=$(( (now - since) / 60 ))
   if [[ "$idle_min" -ge "$IDLE_SHUTDOWN_MIN" ]]; then
     log "Idle: no players for ${idle_min} min — powering off the VM"
+    echo "No players for ${idle_min} min (idle auto-stop)." >"$RUN/stop_reason"
     idle_reset
     systemctl poweroff
+  elif [[ "$idle_min" -ge $(( IDLE_SHUTDOWN_MIN - 10 )) && ! -f "$RUN/idle_warned" ]]; then
+    touch "$RUN/idle_warned"
+    notify "CS2 VM stops in ~10 min" "No players for ${idle_min} min. Join now (connect $(addr)) to keep it running." "hourglass"
   fi
 }
 
@@ -173,6 +240,7 @@ case "$cmd" in
   watchdog)   cmd_watchdog ;;
   idlecheck)  cmd_idlecheck ;;
   idle)       cmd_idle "${1:-status}" ;;
+  notify)     need_root; cmd_notify "${1:-test}" ;;
   help|-h|--help) usage ;;
   *) usage; exit 1 ;;
 esac

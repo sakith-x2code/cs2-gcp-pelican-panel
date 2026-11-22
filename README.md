@@ -1,6 +1,6 @@
 # cs2-gcp — Counter-Strike 2 server on Google Cloud, with a web dashboard
 
-Scripts that build a tuned CS2 dedicated server on a Google Cloud VM and manage it day to day: live stats, player list, map/mode changes, RCON console, logs, automatic updates, a crash watchdog and an idle auto-stop that shuts the VM down when nobody is playing.
+Scripts that build a tuned CS2 dedicated server on a Google Cloud VM and manage it day to day: live stats, player list, map/mode changes, RCON console, logs, automatic updates, a crash watchdog, an idle auto-stop that shuts the VM down when nobody is playing, and phone/Discord notifications when it goes up or down.
 
 **Stack (all open source):** Ubuntu 24.04 · Docker · [`joedwards32/cs2`](https://github.com/joedwards32/CS2) game image (MIT) · [Caddy](https://caddyserver.com) for HTTPS + login · built-in dashboard (Python standard library). Pelican Panel was evaluated and not used: it is built for multi-server hosting and adds a database, Wings daemon and eggs that one server doesn't need (see `docs/USER_GUIDE.md`).
 
@@ -71,6 +71,16 @@ Settings in `cs2.conf` (apply with `./cs2-gcp.sh push` or `sudo ./vm-install.sh`
 | `IDLE_SHUTDOWN` | `1` | `0` turns idle auto-stop off |
 | `IDLE_SHUTDOWN_MIN` | `60` | minutes with no players before the VM stops (minimum 10) |
 
+## Phone notifications
+
+Get a push on your phone when the server comes online (with the connect address), goes down, updates, or stops, plus a warning 10 minutes before idle auto-stop. Uses the free, open-source [ntfy](https://ntfy.sh) app; a Discord channel webhook works too.
+
+1. Install **ntfy** (Android / iPhone), tap **+** and subscribe to a long random topic, e.g. `cs2-sakith-7Kq2pX9d`.
+2. In `cs2.conf` set `NOTIFY_NTFY_TOPIC="cs2-sakith-7Kq2pX9d"` (and/or `NOTIFY_DISCORD_WEBHOOK="https://discord.com/api/webhooks/…"`).
+3. Apply with `sudo ./vm-install.sh` on the VM (or `./cs2-gcp.sh push`), then test: `sudo cs2ctl notify test`.
+
+Details: [Phone notifications](docs/USER_GUIDE.md#phone-notifications).
+
 ## Commands
 
 From Cloud Shell (`./cs2-gcp.sh help`):
@@ -87,7 +97,7 @@ From Cloud Shell (`./cs2-gcp.sh help`):
 | `rcon "<cmd>"`, `logs [N]`, `ssh` | console command · server log · shell |
 | `snapshot`, `resize <type>`, `destroy` | manual backup · change VM size · remove everything |
 
-On the VM (`sudo cs2ctl help`): `status`, `start`, `stop`, `restart`, `update`, `upgrade`, `rcon`, `say`, `logs [-f]`, `console`, `config`, `idle [status|hold|resume]`.
+On the VM (`sudo cs2ctl help`): `status`, `start`, `stop`, `restart`, `update`, `upgrade`, `rcon`, `say`, `logs [-f]`, `console`, `config`, `idle [status|hold|resume]`, `notify test`.
 
 ## Repository layout
 
@@ -96,7 +106,7 @@ cs2-gcp.sh            Cloud Shell CLI (gcloud: network, firewall, IP, VM, snapsh
 vm-install.sh         run ON the VM: first-time setup or update from this checkout
 cs2.conf.example      every setting, documented (copy to cs2.conf; git-ignored)
 server/install.sh     idempotent installer: Docker, OS tuning, CS2 container, Caddy, dashboard, timers
-server/cs2ctl         on-VM management CLI + auto-update / watchdog / idle auto-stop jobs
+server/cs2ctl         on-VM management CLI + auto-update / watchdog / idle auto-stop / notification jobs
 server/dashboard/     web dashboard (app.py API + index.html UI)
 docs/USER_GUIDE.md    installation, specifications, setup, operations, troubleshooting
 ```

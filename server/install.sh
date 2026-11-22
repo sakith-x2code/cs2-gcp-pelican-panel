@@ -246,6 +246,23 @@ TimeoutStartSec=0
 WantedBy=multi-user.target
 EOF
 
+cat >/etc/systemd/system/cs2-notify.service <<'UNIT'
+[Unit]
+Description=CS2 phone/Discord notifications on VM start and shutdown
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/cs2ctl notify boot
+ExecStop=/usr/local/bin/cs2ctl notify shutdown
+TimeoutStopSec=20
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
 for unit in autoupdate:10min watchdog:2min idlecheck:5min; do
   name="${unit%%:*}"; every="${unit##*:}"
   cat >"/etc/systemd/system/cs2-${name}.service" <<EOF
@@ -276,6 +293,7 @@ systemctl enable --now cs2-dashboard.service >/dev/null 2>&1
 systemctl restart cs2-dashboard.service
 systemctl enable cs2-stack.service >/dev/null 2>&1
 systemctl enable --now cs2-autoupdate.timer cs2-watchdog.timer cs2-idlecheck.timer >/dev/null 2>&1
+systemctl enable --now cs2-notify.service >/dev/null 2>&1   # first install sends a "VM started" message
 ok "Services and timers enabled"
 
 # ---------------------------------------------------------------- start
